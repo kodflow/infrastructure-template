@@ -1,19 +1,17 @@
-<!-- updated: 2026-02-14T12:00:00Z -->
+<!-- updated: 2026-02-19T15:10:00Z -->
 # GitHub Configuration
 
 ## Purpose
 
-GitHub-specific configurations: workflows, templates, and instructions.
+GitHub-specific configurations: workflows and CI/CD automation.
 
 ## Structure
 
-```
+```text
 .github/
 ├── workflows/          # GitHub Actions
 │   ├── docker-images.yml
 │   └── CLAUDE.md
-├── instructions/       # AI instructions
-│   └── codacy.instructions.md
 └── CLAUDE.md           # This file
 ```
 
@@ -21,16 +19,11 @@ GitHub-specific configurations: workflows, templates, and instructions.
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| docker-images.yml | push/PR | Build devcontainer images |
-
-## Instructions
-
-| File | Description |
-|------|-------------|
-| codacy.instructions.md | Codacy code quality AI instructions |
+| docker-images.yml | push/PR/schedule | Build and push devcontainer images |
 
 ## Conventions
 
 - Workflows use reusable actions where possible
 - Secrets stored in GitHub repository settings
 - Branch protection on main
+- Action SHAs pinned with version comments
