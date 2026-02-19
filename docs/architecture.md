@@ -1,87 +1,138 @@
-# Architecture: devcontainer-template
+<!-- updated: 2026-02-19T00:00:00Z -->
+# Architecture: infrastructure-template
 
 ## System Context
 
 ```
-Developer IDE (VS Code / Codespaces)
-        |
-.devcontainer/devcontainer.json
-        |
-docker-compose.yml → devcontainer service
-        |
-Base image (Ubuntu 24.04 + core tooling)
-        |
-Lifecycle hooks + language features
-        |
-Claude Code + MCP servers (github, codacy, context7, grepai, playwright)
-        |
-Specialist agents (13 language + 5 executor + 8 devops)
+                         ┌─────────────────┐
+                         │   Cloudflare     │
+                         │ GeoDNS/LB/Proxy  │
+                         └────────┬─────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                    │
+     ┌────────▼──────┐  ┌───────▼───────┐  ┌────────▼──────┐
+     │  Provider A   │  │  Provider B   │  │  Provider C   │
+     │ (AWS/GCP/...) │  │ (Hetzner/...) │  │ (Azure/...)   │
+     └────────┬──────┘  └───────┬───────┘  └────────┬──────┘
+              │                  │                    │
+              └──────────────────┼────────────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │  mgmt.example.com      │
+                    │  (3 serveurs)           │
+                    │                        │
+                    │  Vault │ Consul │ Nomad │
+                    │  Garage S3 │ LDAP │ DNS │
+                    └────────────────────────┘
 ```
 
-## Key Components
+## Template vs Product
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| DevContainer config | `.devcontainer/devcontainer.json` | VS Code entry point |
-| Docker Compose | `.devcontainer/docker-compose.yml` | Service definition, volumes |
-| Base image | `.devcontainer/images/Dockerfile` | Ubuntu + core tooling |
-| Lifecycle hooks | `.devcontainer/hooks/lifecycle/` | Startup automation |
-| Language features | `.devcontainer/features/languages/` | Per-language installers |
-| Specialist agents | `.devcontainer/images/.claude/agents/` | AI agent definitions |
-| Slash commands | `.claude/commands/` | Workflow entry points |
-| MCP template | `.devcontainer/images/mcp.json.tpl` | Server configuration |
+```
+infrastructure-template (ce repo)
+│
+├── 🔒 modules/      ──┐
+├── 🔒 stacks/        │  Synchronise via /update
+├── 🔒 ansible/       │  Jamais modifie dans un produit
+├── 🔒 packer/        │
+├── 🔒 ci/            │
+├── 🔒 tests/       ──┘
+│
+└── ⚡ inventory/     ── Unique par produit
+```
+
+## Components
+
+### modules/cloud/ — Abstractions Provider
+
+Chaque module cloud expose une interface commune et implemente les specificites par provider.
+
+| Module | Responsabilite |
+|--------|---------------|
+| `compute` | Instances/VMs — taille, image, SSH keys |
+| `network` | VPC/VNet, subnets, peering, NAT |
+| `storage` | Buckets S3/GCS/Blob, lifecycle rules |
+| `dns` | Zones, records (hors Cloudflare) |
+
+### modules/services/ — Services Deployables
+
+| Module | Responsabilite |
+|--------|---------------|
+| `vault` | Cluster Vault (HA), unseal, policies |
+| `consul` | Cluster Consul, service mesh, KV |
+| `nomad` | Cluster Nomad (server + client), jobs |
+| `garage` | Cluster Garage S3, buckets, replication |
+| `ldap` | Serveur LDAP, schemas, users |
+| `cloudflare` | Zones, DNS records, page rules, WAF |
+| `vpn` | OpenVPN, WireGuard, PPTP — multi-protocole |
+| `tunnel` | ngrok tunnels pour acces dev/debug |
+| `ssl` | Certificats CF origin + Let's Encrypt fallback |
+
+### modules/base/ — Fondations
+
+| Module | Responsabilite |
+|--------|---------------|
+| `firewall` | Regles par provider (Security Groups, NSG, firewall rules) |
+| `ssh` | Cles SSH, bastion, acces |
+
+### stacks/ — Compositions Terragrunt
+
+| Stack | Modules composes | Usage |
+|-------|-----------------|-------|
+| `management` | vault + consul + nomad + garage + ldap + dns | Management plane complet |
+| `edge` | cloudflare + dns + ssl | Front / reverse proxy |
+| `compute` | network + compute + firewall + ssh | Serveurs de base |
+| `vpn` | vpn (multi-protocole) | Acces securise |
 
 ## Data Flow
 
-1. **Container creation** — VS Code reads `devcontainer.json`, builds and runs service
-2. **onCreate** — Provisions caches, injects CLAUDE.md, sets safe directories
-3. **postCreate** — Wires language managers (NVM, pyenv, rustup), creates aliases
-4. **postStart** — Restores Claude, injects secrets into `mcp.json`, validates setup
-5. **Development** — User invokes slash commands → orchestrators → specialists → output
-
-## Agent Architecture
-
 ```
-User intent (slash command)
-        |
-   Orchestrator (developer/devops)
-        |
-   RLM Decomposition: Peek → Decompose → Parallelize → Synthesize
-        |
-   Specialist agents (language/infra/security)
-        |
-   Executor agents (correctness/security/design/quality/shell)
-        |
-   Validated output (code, review, plan)
+1. Deploiement
+   inventory/ → Terragrunt → Terraform → Provider API → Infrastructure
+
+2. Configuration
+   Ansible inventory → Playbooks → Roles → Serveurs configures
+
+3. Secrets
+   Vault ← Consul (discovery) ← Apps
+   1Password → Vault (bootstrap initial)
+
+4. State
+   Terraform state → Garage S3 (mgmt.example.com)
+   State lock → Consul KV
+
+5. DNS
+   Cloudflare → GeoDNS → Provider LB → Instances
+   (fallback: DNS direct sans Cloudflare)
+
+6. Monitoring
+   Drift detection → Compare state vs real → Alert si divergence
+   Infracost → Estimation sur chaque PR/MR
 ```
 
 ## Technology Stack
 
-- **Base**: `mcr.microsoft.com/devcontainers/base:ubuntu-24.04`
-- **Cloud CLIs**: AWS v2, GCP SDK, Azure CLI
-- **IaC**: Terraform, Vault, Consul, Nomad, Packer, Ansible
-- **Containers**: kubectl, Helm, Docker Compose
-- **Languages**: Managed via devcontainer features (NVM, pyenv, rustup, etc.)
-- **AI**: Claude Code, MCP servers, grepai semantic search
+| Couche | Outil | Role |
+|--------|-------|------|
+| Provisioning | Terraform + Terragrunt | Infrastructure as Code |
+| Configuration | Ansible | Configuration management |
+| Images | Packer | Images immutables |
+| Secrets | Vault | Dynamic secrets, encryption |
+| Discovery | Consul | Service mesh, health checks |
+| Orchestration | Nomad | Workload scheduling |
+| Storage | Garage S3 | Object storage, TF state |
+| Identity | LDAP | Authentification centralisee |
+| Edge | Cloudflare | DNS, proxy, WAF, SSL |
+| VPN | OpenVPN/WireGuard/PPTP | Acces securise |
+| Tests | Terratest + Molecule | Validation infra |
+| Cost | Infracost | Estimation pre-deploy |
+| CI/CD | GitHub Actions + GitLab CI | Automation |
 
-## External Dependencies
+## Constraints
 
-| Service | Tool | Purpose |
-|---------|------|---------|
-| GitHub | `@modelcontextprotocol/server-github` | PR automation, code search |
-| Codacy | `@codacy/codacy-mcp` | Security and lint analysis |
-| context7 | `@upstash/context7-mcp` | Official library documentation |
-| Playwright | `@playwright/mcp` | Browser automation, E2E testing |
-| grepai | Local MCP | Semantic code search, call graphs |
-
-## Volumes
-
-```yaml
-volumes:
-  package-cache:    # npm, pip, cargo caches
-  npm-global:       # Global npm packages
-  claude-data:      # Claude CLI state
-  op-config:        # 1Password config
-```
-
-See `.devcontainer/docker-compose.yml` for full configuration.
+- **Self-hosted first**: management plane sur mgmt.example.com, pas de SaaS
+- **Fail-safe**: chaque service a un fallback (CF → Let's Encrypt, Vault → 1Password)
+- **Provider-agnostic**: modules abstraient les differences entre clouds
+- **Single maintainer**: simplicite et automatisation maximales
+- **Open source only**: zero dependance proprietaire

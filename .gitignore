@@ -126,6 +126,7 @@ out/
 # ============================================
 .devcontainer/docs/
 .devcontainer/.template-version
+.infra-template-version
 
 # ============================================
 # Ignore vscode AI rules

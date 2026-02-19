@@ -1,135 +1,93 @@
-<!-- updated: 2026-02-14T12:00:00Z -->
-# devcontainer-template
+<!-- updated: 2026-02-19T00:00:00Z -->
+# infrastructure-template
 
 ## Purpose
 
-Universal DevContainer shell providing cutting-edge AI agents, skills, and workflows to bootstrap any project. Reliability first: agents reason deeply, cross-reference sources, and self-correct until the output meets quality standards.
+Template de base pour toute infrastructure. Replique sur 1000+ produits, seul l'inventory change par projet. Modules Terraform, roles Ansible, stacks Terragrunt et pipelines CI/CD sont synchronises depuis ce template.
 
 ## Project Structure
 
 ```
 /workspace
-├── .devcontainer/   # Container config, features, hooks, images
-├── .github/         # GitHub Actions workflows
-├── .githooks/       # Git hooks (pre-commit: regenerate assets)
-├── src/             # All source code (mandatory)
-├── tests/           # Unit tests (Go: alongside code in src/)
-├── docs/            # Documentation (vision, architecture, workflows)
-├── AGENTS.md        # Specialist agents specification
-└── CLAUDE.md        # This file
+├── modules/              # Terraform modules (atomiques, multi-provider)
+│   ├── cloud/            #   compute, network, storage, dns
+│   ├── services/         #   vault, consul, nomad, garage, ldap, cloudflare, vpn, tunnel, ssl
+│   └── base/             #   firewall, ssh
+├── stacks/               # Terragrunt stacks (compositions de modules)
+│   ├── management/       #   vault+consul+nomad+garage+ldap+dns
+│   ├── edge/             #   cloudflare+dns+ssl
+│   ├── compute/          #   network+compute+firewall
+│   └── vpn/              #   openvpn+wireguard+pptp
+├── ansible/              # Roles et playbooks
+│   ├── roles/
+│   └── playbooks/
+├── packer/               # Images machine par provider
+├── ci/                   # Pipelines (GitHub Actions + GitLab CI)
+├── tests/                # Terratest + Molecule
+├── inventory/            # DYNAMIQUE — unique par produit
+├── docs/                 # Documentation
+├── terragrunt.hcl        # Root config (backend Garage S3)
+├── Makefile              # deploy, plan, test, drift, cost
+├── AGENTS.md             # Specialist agents
+└── CLAUDE.md             # This file
 ```
 
 ## Tech Stack
 
-- **Languages**: Python, C, C++, Java, C#, JavaScript/Node.js, Visual Basic, R, Pascal, Perl, Fortran, PHP, Rust, Go, Ada, MATLAB, Assembly, Kotlin, Swift, COBOL, Ruby, Dart, Lua, Scala, Elixir, SQL
-- **Cloud CLIs**: AWS v2, GCP SDK, Azure CLI
-- **IaC**: Terraform, Vault, Consul, Nomad, Packer, Ansible
-- **Containers**: Docker, kubectl, Helm
-- **AI**: Claude Code, MCP servers (GitHub, Codacy, Playwright, context7, grepai)
+- **IaC**: Terraform, Terragrunt, Packer
+- **Config**: Ansible
+- **Orchestration**: Nomad (client + server)
+- **Service mesh**: Consul
+- **Secrets**: Vault (99%) + 1Password (fallback)
+- **Storage**: Garage S3 (state backend + object storage)
+- **Identity**: LDAP
+- **Edge**: Cloudflare (proxy/GeoDNS/LB/SSL) + Let's Encrypt fallback
+- **VPN**: OpenVPN, WireGuard, PPTP
+- **Tunneling**: ngrok
+- **CI/CD**: GitHub Actions, GitLab CI
+- **Tests**: Terratest (Go), Molecule (Python), Infracost
+- **Providers**: AWS, GCP, Azure, Oracle Cloud, Hetzner, Heroku
 
 ## How to Work
 
-1. **New project**: `/init` → conversational discovery → doc generation
-2. **New feature**: `/plan "description"` → planning mode → `/do` → `/git --commit`
-3. **Bug fix**: `/plan "description"` → planning mode → `/do` → `/git --commit`
-4. **Code review**: `/review` → 5 specialist executors in parallel
-
-Branch conventions: `feat/<desc>` or `fix/<desc>`, commit prefix matches.
+1. **New product**: clone template, fill `inventory/`, run `make plan`
+2. **New feature**: `/plan "description"` → `/do` → `/git --commit`
+3. **Bug fix**: `/plan "description"` → `/do` → `/git --commit`
+4. **Code review**: `/review` → specialist agents
+5. **Sync template**: `/update` (devcontainer + infra-template)
 
 ## Key Principles
 
-**Reliability first**: Verify before generating. Agents consult context7 and official docs before producing non-trivial code.
-
-**MCP-first**: Use MCP tools (`mcp__github__*`, `mcp__codacy__*`) before CLI fallbacks. Auth is pre-configured.
-
-**Self-correction**: When linting or tests fail, agents fix and retry automatically.
-
-**Semantic search**: Use `grepai_search` for meaning-based queries. Fall back to Grep for exact strings.
-
-**Specialist agents**: Language conventions enforced by agents that know current stable versions.
-
-**Deep reasoning**: For complex tasks — Peek, Decompose, Parallelize, Synthesize.
-
-## Safeguards
-
-Ask before:
-- Deleting files in `.claude/` or `.devcontainer/`
-- Removing features from `.claude/commands/*.md`
-- Removing hooks from `.devcontainer/hooks/`
-
-When refactoring: move content to separate files, preserve logic.
-
-## Pre-commit
-
-Auto-detected by language marker (`go.mod`, `Cargo.toml`, `package.json`, etc.). Priority: Makefile targets, then language-specific commands.
-
-## Hooks
-
-| Hook | Purpose |
-|------|---------|
-| pre-validate | Protect sensitive files |
-| post-edit | Format + lint |
-| security | Secret detection + auto-correct --force |
-| test | Run related tests |
-| on-stop | Session summary + terminal bell |
-| notification | External monitoring notifications |
-| session-init | Cache project metadata as env vars |
-
-## /secret - Secure Secret Management (1Password)
-
-```
-/secret --push DB_PASSWORD=mypass     # Store secret
-/secret --get DB_PASSWORD             # Retrieve secret
-/secret --list                        # List project secrets
-/secret --push KEY=val --path org/other  # Cross-project
-```
-
-**Path convention:** `<org>/<repo>/<key>` (auto-resolved from git remote)
-**Backend:** 1Password CLI (`op`) with `OP_SERVICE_ACCOUNT_TOKEN`
-**Integration:** `/init` (check), `/git` (scan), `/do` (discover), `/infra` (TF_VAR_*)
-
-## Documentation Hierarchy
-
-```
-CLAUDE.md                    # This overview
-├── AGENTS.md                # Specialist agents (57 agents)
-├── docs/vision.md           # Objectives, success criteria
-├── docs/architecture.md     # System design, components
-├── docs/workflows.md        # Detailed workflows
-├── .devcontainer/CLAUDE.md  # Container config details
-│   ├── features/CLAUDE.md   # Language & tool features
-│   ├── hooks/CLAUDE.md      # Lifecycle hooks delegation
-│   └── images/CLAUDE.md     # Base image (170 lines)
-└── .claude/commands/        # Slash commands (16 skills)
-```
-
-Principle: More detail deeper in tree. Target < 200 lines each.
-
-## Commands
-
-| Command | Purpose |
-|---------|---------|
-| `/init` | Conversational project discovery + doc generation |
-| `/plan` | Analyze codebase and design implementation approach |
-| `/do` | Execute approved plans iteratively |
-| `/review` | Code review with 5 specialist agents |
-| `/git` | Conventional commits, branch management |
-| `/search` | Documentation research with official sources |
-| `/docs` | Deep project documentation generation |
-| `/test` | E2E testing with Playwright MCP |
-| `/lint` | Intelligent linting with ktn-linter |
-| `/infra` | Infrastructure automation (Terraform/Terragrunt) |
-| `/secret` | Secure secret management (1Password) |
-| `/vpn` | Multi-protocol VPN management |
-| `/warmup` | Context pre-loading and CLAUDE.md update |
-| `/update` | DevContainer update from template |
-| `/improve` | Documentation QA for design patterns |
-| `/prompt` | Generate ideal prompt structure for /plan requests |
+- **Inventory-driven**: toute specificite produit dans `inventory/`, jamais dans les modules
+- **Provider-agnostic**: chaque module cloud/ abstrait les differences entre providers
+- **Composition**: les stacks composent des modules via Terragrunt
+- **Test everything**: Terratest pour TF, Molecule pour Ansible, Infracost pour les couts
+- **Fail-safe**: fonctionne avec et sans Cloudflare, avec et sans management domain
 
 ## Verification
 
-Changes are complete when:
-- Tests pass (`make test` or language equivalent)
-- Linting passes (auto-run by hooks)
-- No secrets in commits (checked by security hook)
-- Commit follows conventional format
+```bash
+make plan          # Terraform plan via Terragrunt
+make apply         # Deploy
+make test          # Terratest + Molecule
+make drift         # Drift detection
+make cost          # Infracost estimation
+make lint          # tflint + ansible-lint
+make validate      # terraform validate + ansible --syntax-check
+```
+
+## Management Domain
+
+`mgmt.example.com` — 3 serveurs hebergeant :
+- Garage S3 (TF state + object storage)
+- Vault (secrets + dynamic credentials)
+- Consul (service discovery + KV)
+- Nomad (workload orchestration)
+- LDAP (identity)
+- DNS (internal resolution)
+
+## Documentation
+
+- [Vision](docs/vision.md) — objectifs, criteres de succes
+- [Architecture](docs/architecture.md) — composants, flux de donnees
+- [Workflows](docs/workflows.md) — processus de developpement
