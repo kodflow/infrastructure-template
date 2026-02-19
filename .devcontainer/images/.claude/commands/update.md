@@ -1,15 +1,24 @@
 ---
 name: update
 description: |
-  DevContainer Environment Update from official template.
+  DevContainer Environment Update from official templates.
   Updates hooks, commands, agents, and settings from kodflow/devcontainer-template.
-  Use when: syncing local devcontainer with latest template improvements.
+  If infrastructure profile detected, also syncs modules, stacks, ansible, packer, ci, tests
+  from kodflow/infrastructure-template.
 allowed-tools:
   - "Bash(curl:*)"
   - "Bash(git:*)"
   - "Bash(jq:*)"
+  - "Bash(mkdir:*)"
   - "Read(**/*)"
   - "Write(.devcontainer/**/*)"
+  - "Write(modules/**/*)"
+  - "Write(stacks/**/*)"
+  - "Write(ansible/**/*)"
+  - "Write(packer/**/*)"
+  - "Write(ci/**/*)"
+  - "Write(tests/**/*)"
+  - "Write(.infra-template-version)"
   - "WebFetch(*)"
   - "Task(*)"
 ---
@@ -22,12 +31,17 @@ $ARGUMENTS
 
 ## Description
 
-Updates the DevContainer environment from the official template.
+Updates the DevContainer environment from official templates.
+Supports **dual-source sync** for infrastructure projects.
 
 **API-FIRST approach**: Uses the GitHub API to dynamically discover
 existing files instead of hardcoded lists.
 
-**Updated components:**
+**Template Profile Detection**: Automatically detects whether the project
+inherits from `infrastructure-template` by checking for `modules/`, `stacks/`,
+or `ansible/` directories. Infrastructure projects sync from both sources.
+
+**DevContainer components** (from `devcontainer-template`):
 
 - **Hooks** - Claude scripts (format, lint, security, etc.)
 - **Commands** - Slash commands (/git, /search, etc.)
@@ -39,7 +53,18 @@ existing files instead of hardcoded lists.
 - **Compose** - docker-compose.yml (update devcontainer, preserve custom)
 - **Grepai** - Optimized grepai configuration
 
-**Source**: `github.com/kodflow/devcontainer-template`
+**Infrastructure components** (from `infrastructure-template`, if detected):
+
+- **Modules** - Terraform modules (`modules/`)
+- **Stacks** - Terragrunt stacks (`stacks/`)
+- **Ansible** - Roles and playbooks (`ansible/`)
+- **Packer** - Machine images (`packer/`)
+- **CI** - Pipeline definitions (`ci/`)
+- **Tests** - Terratest + Molecule (`tests/`)
+
+**Sources**:
+- `github.com/kodflow/devcontainer-template` (always)
+- `github.com/kodflow/infrastructure-template` (infrastructure profile only)
 
 ---
 
@@ -47,12 +72,17 @@ existing files instead of hardcoded lists.
 
 | Pattern | Action |
 |---------|--------|
-| (none) | Full update |
+| (none) | Full update (both sources if infrastructure profile) |
 | `--check` | Check for available updates |
 | `--component <name>` | Update a specific component |
+| `--profile` | Display detected template profile |
+| `--infra-only` | Sync only from infrastructure-template |
+| `--devcontainer-only` | Sync only from devcontainer-template |
 | `--help` | Show help |
 
 ### Available components
+
+**DevContainer components** (from `devcontainer-template`):
 
 | Component | Path | Description |
 |-----------|------|-------------|
@@ -67,24 +97,38 @@ existing files instead of hardcoded lists.
 | `compose` | `.devcontainer/docker-compose.yml` | Update devcontainer service |
 | `grepai` | `.devcontainer/images/grepai.config.yaml` | grepai config |
 
+**Infrastructure components** (from `infrastructure-template`, infrastructure profile only):
+
+| Component | Path | Description |
+|-----------|------|-------------|
+| `modules` | `modules/` | Terraform modules |
+| `stacks` | `stacks/` | Terragrunt stacks |
+| `ansible` | `ansible/` | Roles and playbooks |
+| `packer` | `packer/` | Machine images |
+| `ci` | `ci/` | Pipeline definitions |
+| `tests` | `tests/` | Terratest + Molecule |
+
 ---
 
 ## --help
 
 ```
 ═══════════════════════════════════════════════
-  /update - DevContainer Environment Update
+  /update - Template Environment Update
 ═══════════════════════════════════════════════
 
 Usage: /update [options]
 
 Options:
-  (none)              Full update
-  --check             Check for updates
-  --component <name>  Update a component
-  --help              Show this help
+  (none)                Full update (auto-detect profile)
+  --check               Check for updates
+  --component <name>    Update a component
+  --profile             Show detected template profile
+  --infra-only          Sync infrastructure-template only
+  --devcontainer-only   Sync devcontainer-template only
+  --help                Show this help
 
-Components:
+DevContainer components:
   hooks        Claude scripts (format, lint...)
   commands     Slash commands (/git, /search)
   agents       Agent definitions (specialists)
@@ -96,12 +140,30 @@ Components:
   compose      docker-compose.yml (devcontainer service)
   grepai       grepai config (provider, model)
 
-Examples:
-  /update                       Update everything
-  /update --check               Check for updates
-  /update --component hooks     Hooks only
+Infrastructure components (infrastructure profile only):
+  modules      Terraform modules
+  stacks       Terragrunt stacks
+  ansible      Roles and playbooks
+  packer       Machine images
+  ci           Pipeline definitions
+  tests        Terratest + Molecule
 
-Source: kodflow/devcontainer-template (main)
+Profile detection:
+  modules/ OR stacks/ OR ansible/ exists → infrastructure
+  Otherwise → devcontainer (single source)
+
+Examples:
+  /update                       Update everything (auto-detect)
+  /update --check               Check for updates
+  /update --profile             Show detected profile
+  /update --component hooks     Hooks only
+  /update --component modules   Terraform modules only
+  /update --infra-only          Infrastructure sync only
+  /update --devcontainer-only   DevContainer sync only
+
+Sources:
+  1. kodflow/devcontainer-template (always)
+  2. kodflow/infrastructure-template (infrastructure profile)
 ═══════════════════════════════════════════════
 ```
 
@@ -109,22 +171,31 @@ Source: kodflow/devcontainer-template (main)
 
 ## Overview
 
-DevContainer environment update using **RLM** patterns:
+Template environment update using **RLM** patterns:
 
-- **Peek** - Verify connectivity and versions
-- **Discover** - Dynamically discover files via GitHub API
+- **Environment Detection** - Detect container vs host context
+- **Profile Detection** - Detect devcontainer vs infrastructure profile
+- **Peek** - Verify connectivity and versions (both sources if infrastructure)
+- **Discover** - Dynamically discover files via GitHub API (Git Trees for infra)
 - **Validate** - Validate each download (no 404)
-- **Synthesize** - Apply updates and consolidated report
+- **Synthesize** - Apply updates (5.1 DevContainer + 5.2 Infrastructure) and consolidated report
 
 ---
 
 ## Configuration
 
 ```yaml
-REPO: "kodflow/devcontainer-template"
-BRANCH: "main"
-BASE_URL: "https://raw.githubusercontent.com/${REPO}/${BRANCH}"
-API_URL: "https://api.github.com/repos/${REPO}/contents"
+# DevContainer source (always active)
+DC_REPO: "kodflow/devcontainer-template"
+DC_BRANCH: "main"
+DC_BASE_URL: "https://raw.githubusercontent.com/${DC_REPO}/${DC_BRANCH}"
+DC_API_URL: "https://api.github.com/repos/${DC_REPO}/contents"
+
+# Infrastructure source (infrastructure profile only)
+INFRA_REPO: "kodflow/infrastructure-template"
+INFRA_BRANCH: "main"
+INFRA_BASE_URL: "https://raw.githubusercontent.com/${INFRA_REPO}/${INFRA_BRANCH}"
+INFRA_TREES_URL: "https://api.github.com/repos/${INFRA_REPO}/git/trees/${INFRA_BRANCH}?recursive=1"
 ```
 
 ---
@@ -273,33 +344,140 @@ Or in container:
 
 ---
 
+## Phase 1.5: Template Profile Detection
+
+**MANDATORY: Detect template profile after environment detection.**
+
+Detection is based on directory presence — no marker files needed:
+
+```yaml
+profile_detection:
+  rule: |
+    If modules/ OR stacks/ OR ansible/ exists → "infrastructure"
+    Otherwise → "devcontainer"
+
+  infrastructure:
+    sources:
+      - "kodflow/devcontainer-template (core)"
+      - "kodflow/infrastructure-template (infra)"
+    sync_dirs:
+      - modules/
+      - stacks/
+      - ansible/
+      - packer/
+      - ci/
+      - tests/
+
+  devcontainer:
+    sources:
+      - "kodflow/devcontainer-template (core)"
+```
+
+**Implementation:**
+
+```bash
+# Detect template profile based on directory structure
+detect_template_profile() {
+    if [ -d "modules" ] || [ -d "stacks" ] || [ -d "ansible" ]; then
+        PROFILE="infrastructure"
+        INFRA_REPO="kodflow/infrastructure-template"
+        INFRA_BRANCH="main"
+        INFRA_BASE="https://raw.githubusercontent.com/${INFRA_REPO}/${INFRA_BRANCH}"
+        INFRA_TREES="https://api.github.com/repos/${INFRA_REPO}/git/trees/${INFRA_BRANCH}?recursive=1"
+    else
+        PROFILE="devcontainer"
+        INFRA_REPO=""
+    fi
+}
+
+detect_template_profile
+```
+
+**Output Phase 1.5 (infrastructure):**
+
+```
+═══════════════════════════════════════════════
+  Template Profile Detection
+═══════════════════════════════════════════════
+  Profile  : infrastructure
+  Sources  :
+    1. kodflow/devcontainer-template (core)
+    2. kodflow/infrastructure-template (infra)
+═══════════════════════════════════════════════
+```
+
+**Output Phase 1.5 (devcontainer):**
+
+```
+═══════════════════════════════════════════════
+  Template Profile Detection
+═══════════════════════════════════════════════
+  Profile  : devcontainer
+  Sources  :
+    1. kodflow/devcontainer-template (core)
+═══════════════════════════════════════════════
+```
+
+**Protected paths** (NEVER overwritten by infrastructure sync):
+
+| Path | Reason |
+|------|--------|
+| `inventory/` | Product-specific configuration |
+| `terragrunt.hcl` | Root config specific to product |
+| `.env*` | Secrets and environment variables |
+| `CLAUDE.md` | Project documentation |
+| `AGENTS.md` | Project agents definition |
+| `README.md` | Project readme |
+| `Makefile` | Project build configuration |
+| `docs/` | Project documentation |
+
+---
+
 ## Phase 2.0: Peek (Version Check)
 
 ```yaml
 peek_workflow:
-  1_connectivity:
-    action: "Verify GitHub connectivity"
+  1_dc_connectivity:
+    action: "Verify GitHub connectivity (devcontainer-template)"
     tool: WebFetch
     url: "https://api.github.com/repos/kodflow/devcontainer-template/commits/main"
 
-  2_local_version:
-    action: "Read local version"
+  2_dc_local_version:
+    action: "Read local devcontainer version"
     tool: Read
     file: ".devcontainer/.template-version"
+
+  3_infra_connectivity:
+    condition: "PROFILE == infrastructure"
+    action: "Verify GitHub connectivity (infrastructure-template)"
+    tool: WebFetch
+    url: "https://api.github.com/repos/kodflow/infrastructure-template/commits/main"
+
+  4_infra_local_version:
+    condition: "PROFILE == infrastructure"
+    action: "Read local infrastructure version"
+    tool: Read
+    file: ".infra-template-version"
 ```
 
-**Output Phase 2.0:**
+**Output Phase 2.0 (infrastructure profile):**
 
 ```
 ═══════════════════════════════════════════════
   /update - Peek Analysis
 ═══════════════════════════════════════════════
 
-  Connectivity   : ✓ GitHub API accessible
-  Local version  : abc1234 (2024-01-15)
-  Remote version : def5678 (2024-01-20)
+  DevContainer source:
+    Connectivity   : ✓ GitHub API accessible
+    Local version  : abc1234 (2024-01-15)
+    Remote version : def5678 (2024-01-20)
+    Status: UPDATE AVAILABLE
 
-  Status: UPDATE AVAILABLE
+  Infrastructure source:
+    Connectivity   : ✓ GitHub API accessible
+    Local version  : (none - first sync)
+    Remote version : ghi9012 (2024-01-18)
+    Status: UPDATE AVAILABLE
 
 ═══════════════════════════════════════════════
 ```
@@ -378,7 +556,7 @@ discover_workflow:
       note: "Optimized config with bge-m3 model (best accuracy)"
 ```
 
-**Discover implementation:**
+**Discover implementation (DevContainer):**
 
 ```bash
 # Function to list files from a directory via GitHub API
@@ -404,6 +582,44 @@ AGENTS=$(list_remote_files \
     "https://api.github.com/repos/kodflow/devcontainer-template/contents/.devcontainer/images/.claude/agents" \
     '\.md$')
 ```
+
+**Discover implementation (Infrastructure — Git Trees API):**
+
+Uses a single API call to discover all infrastructure files (saves API quota):
+
+```bash
+# Discover infrastructure files via Git Trees API (1 request for entire tree)
+discover_infra_files() {
+    if [ "$PROFILE" != "infrastructure" ]; then
+        return 0
+    fi
+
+    # Single API call for entire repository tree
+    INFRA_TREE=$(curl -sL "$INFRA_TREES" | jq -r '.tree[] | select(.type == "blob") | .path')
+
+    # Filter relevant directories
+    INFRA_FILES=$(echo "$INFRA_TREE" | grep -E '^(modules|stacks|ansible|packer|ci|tests)/' || true)
+
+    if [ -z "$INFRA_FILES" ]; then
+        echo "  ⚠ No infrastructure files found in template"
+        return 0
+    fi
+
+    INFRA_FILE_COUNT=$(echo "$INFRA_FILES" | wc -l | tr -d ' ')
+    echo "  Discovered $INFRA_FILE_COUNT infrastructure files"
+}
+```
+
+**Infrastructure sync directories:**
+
+| Source path | Local path | Description |
+|-------------|------------|-------------|
+| `modules/**` | `modules/` | Terraform modules |
+| `stacks/**` | `stacks/` | Terragrunt stacks |
+| `ansible/**` | `ansible/` | Roles and playbooks |
+| `packer/**` | `packer/` | Machine images |
+| `ci/**` | `ci/` | Pipeline definitions |
+| `tests/**` | `tests/` | Terratest + Molecule |
 
 ---
 
@@ -474,7 +690,7 @@ safe_download() {
 
 ## Phase 5.0: Synthesize (Apply Updates)
 
-### 5.1: Download components
+### 5.1: DevContainer Sync (from devcontainer-template)
 
 **IMPORTANT**: Use `safe_download` for each file.
 
@@ -682,7 +898,77 @@ safe_download \
     ".devcontainer/images/grepai.config.yaml"
 ```
 
-### 5.2: Cleanup deprecated files
+### 5.2: Infrastructure Sync (from infrastructure-template, if detected)
+
+**Condition:** Only runs when `PROFILE == "infrastructure"`.
+
+**Strategy:** Download each file from the infrastructure template using the Git Trees
+discovery (Phase 3.0). Protected paths are NEVER overwritten.
+
+```bash
+# Infrastructure sync (only if infrastructure profile detected)
+sync_infrastructure() {
+    if [ "$PROFILE" != "infrastructure" ]; then
+        return 0
+    fi
+
+    echo ""
+    echo "═══════════════════════════════════════════════"
+    echo "  Phase 5.2: Infrastructure Sync"
+    echo "═══════════════════════════════════════════════"
+
+    local infra_count=0
+    local infra_skip=0
+
+    # Protected paths - NEVER overwritten
+    local protected="inventory/ terragrunt.hcl .env CLAUDE.md AGENTS.md README.md Makefile docs/"
+
+    # Download infrastructure files discovered in Phase 3.0
+    echo "$INFRA_FILES" | while IFS= read -r filepath; do
+        [ -z "$filepath" ] && continue
+
+        # Check against protected paths
+        local is_protected=false
+        for p in $protected; do
+            case "$filepath" in
+                ${p}*) is_protected=true; break ;;
+            esac
+        done
+
+        if [ "$is_protected" = true ]; then
+            infra_skip=$((infra_skip + 1))
+            continue
+        fi
+
+        # Download and write file
+        if safe_download "$INFRA_BASE/$filepath" "$filepath"; then
+            # Make scripts executable
+            case "$filepath" in
+                *.sh) chmod +x "$filepath" ;;
+            esac
+            infra_count=$((infra_count + 1))
+        fi
+    done
+
+    echo ""
+    echo "  Infrastructure sync: $infra_count files updated, $infra_skip protected"
+}
+
+sync_infrastructure
+```
+
+**Infrastructure components synced:**
+
+| Component | Source path | Description |
+|-----------|------------|-------------|
+| Modules | `modules/**` | Terraform modules (cloud, services, base) |
+| Stacks | `stacks/**` | Terragrunt stacks (management, edge, compute, vpn) |
+| Ansible | `ansible/**` | Roles and playbooks |
+| Packer | `packer/**` | Machine images per provider |
+| CI | `ci/**` | GitHub Actions + GitLab CI pipelines |
+| Tests | `tests/**` | Terratest + Molecule tests |
+
+### 5.3: Cleanup deprecated files
 
 ```bash
 # Remove deprecated configuration files
@@ -690,24 +976,84 @@ safe_download \
     && echo "Removed deprecated .coderabbit.yaml"
 ```
 
-### 5.3: Update version file
+### 5.4: Update version files
 
 ```bash
-COMMIT=$(curl -sL "https://api.github.com/repos/kodflow/devcontainer-template/commits/main" | jq -r '.sha[:7]')
+# DevContainer version (always)
+DC_COMMIT=$(curl -sL "https://api.github.com/repos/kodflow/devcontainer-template/commits/main" | jq -r '.sha[:7]')
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.template-version
+echo "{\"commit\": \"$DC_COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.template-version
+
+# Infrastructure version (only if infrastructure profile)
+if [ "$PROFILE" = "infrastructure" ]; then
+    INFRA_COMMIT=$(curl -sL "https://api.github.com/repos/kodflow/infrastructure-template/commits/main" | jq -r '.sha[:7]')
+    echo "{\"commit\": \"$INFRA_COMMIT\", \"updated\": \"$DATE\", \"source\": \"kodflow/infrastructure-template\"}" > .infra-template-version
+fi
 ```
 
-### 5.4: Consolidated report
+### 5.5: Consolidated report
 
-**Final output:**
+**Final output (infrastructure profile):**
 
 ```
 ═══════════════════════════════════════════════
-  ✓ DevContainer updated successfully
+  ✓ Update complete
 ═══════════════════════════════════════════════
 
-  Template: kodflow/devcontainer-template
+  Profile : infrastructure (dual-source)
+
+  Source 1: kodflow/devcontainer-template
+  Version : def5678 (2024-01-20)
+
+  DevContainer components:
+    ✓ hooks        (10 scripts)
+    ✓ commands     (10 commands)
+    ✓ agents       (35 agents)
+    ✓ lifecycle    (6 delegation stubs)
+    ✓ image-hooks  (6 image-embedded hooks)
+    ✓ shared-utils (1 file)
+    ✓ p10k         (1 file)
+    ✓ settings     (1 file)
+    ✓ compose      (devcontainer service updated)
+    ✓ grepai       (1 file - bge-m3 config)
+    ✓ user-hooks   (synchronized with template)
+    ✓ validation   (all scripts exist)
+
+  Source 2: kodflow/infrastructure-template
+  Version : ghi9012 (2024-01-18)
+
+  Infrastructure components:
+    ✓ modules      (42 files)
+    ✓ stacks       (15 files)
+    ✓ ansible      (28 files)
+    ✓ packer       (8 files)
+    ✓ ci           (12 files)
+    ✓ tests        (18 files)
+    ⊘ Protected    (inventory/, terragrunt.hcl, docs/, ...)
+
+  Grepai config:
+    provider: ollama
+    model: bge-m3
+    endpoint: host.docker.internal:11434 (GPU-accelerated)
+
+  Cleanup:
+    ✓ .coderabbit.yaml removed (if existed)
+
+  Note: Restart terminal to apply p10k changes.
+
+═══════════════════════════════════════════════
+```
+
+**Final output (devcontainer profile):**
+
+```
+═══════════════════════════════════════════════
+  ✓ Update complete
+═══════════════════════════════════════════════
+
+  Profile : devcontainer (single source)
+
+  Source: kodflow/devcontainer-template
   Version : def5678 (2024-01-20)
 
   Updated components:
@@ -904,12 +1250,14 @@ validate_hook_scripts() {
 | Skip script validation | **FORBIDDEN** | Error detection MANDATORY |
 | `for x in $VAR` pattern | **FORBIDDEN** | Breaks in zsh ($SHELL=zsh) |
 | Inline execution without bash | **FORBIDDEN** | Always `bash /tmp/script.sh` |
+| Overwrite protected paths | **FORBIDDEN** | inventory/, terragrunt.hcl, .env*, docs/, CLAUDE.md, AGENTS.md, README.md, Makefile |
+| Infra sync without profile check | **FORBIDDEN** | Must detect profile first |
 
 ---
 
 ## Affected files
 
-**Updated by /update:**
+**Updated by /update (DevContainer sync — always):**
 ```
 .devcontainer/
 ├── docker-compose.yml            # Update devcontainer service
@@ -930,6 +1278,24 @@ validate_hook_scripts() {
 └── .template-version
 ```
 
+**Updated by /update (Infrastructure sync — infrastructure profile only):**
+```
+modules/                          # Terraform modules
+├── cloud/                        #   compute, network, storage, dns
+├── services/                     #   vault, consul, nomad, garage, ldap, etc.
+└── base/                         #   firewall, ssh
+stacks/                           # Terragrunt stacks
+├── management/                   #   vault+consul+nomad+garage+ldap+dns
+├── edge/                         #   cloudflare+dns+ssl
+├── compute/                      #   network+compute+firewall
+└── vpn/                          #   openvpn+wireguard+pptp
+ansible/                          # Roles and playbooks
+packer/                           # Machine images
+ci/                               # GitHub Actions + GitLab CI
+tests/                            # Terratest + Molecule
+.infra-template-version           # Infrastructure version tracker
+```
+
 **In the Docker image (restored at startup):**
 ```
 /etc/grepai/config.yaml            # GrepAI config template
@@ -937,11 +1303,20 @@ validate_hook_scripts() {
 /etc/claude-defaults/*             # Claude defaults
 ```
 
-**NEVER modified:**
+**NEVER modified by /update:**
 ```
 .devcontainer/
 ├── devcontainer.json      # Project config (customizations)
 └── Dockerfile             # Image customizations
+
+inventory/                 # Product-specific configuration
+terragrunt.hcl             # Root config (product-specific)
+.env*                      # Secrets and environment variables
+CLAUDE.md                  # Project documentation
+AGENTS.md                  # Project agents
+README.md                  # Project readme
+Makefile                   # Project build
+docs/                      # Project documentation
 ```
 
 ---
@@ -958,17 +1333,26 @@ bash /tmp/update-devcontainer.sh && rm -f /tmp/update-devcontainer.sh
 
 ```bash
 #!/bin/bash
-# /update implementation - API-FIRST with validation + Environment Detection
+# /update implementation - API-FIRST with validation + Environment Detection + Profile Detection
+# Supports dual-source sync: devcontainer-template + infrastructure-template
 # NOTE: Must be executed with bash (not zsh) due to word splitting in for loops.
 # If running from Claude Code (zsh), write to temp file first: bash /tmp/script.sh
 
 set -uo pipefail
 set +H 2>/dev/null || true  # Disable bash history expansion (! in YAML causes errors)
 
+# DevContainer source (always)
 BASE="https://raw.githubusercontent.com/kodflow/devcontainer-template/main"
 API="https://api.github.com/repos/kodflow/devcontainer-template/contents"
 
-# Environment detection function (Phase 0)
+# Infrastructure source (set by detect_template_profile if needed)
+PROFILE="devcontainer"
+INFRA_REPO=""
+INFRA_BASE=""
+INFRA_TREES=""
+INFRA_FILES=""
+
+# Environment detection function (Phase 1.0)
 detect_context() {
     # Check if running inside container
     if [ -f /.dockerenv ]; then
@@ -988,6 +1372,99 @@ detect_context() {
 
     echo "Update target: $UPDATE_TARGET"
     echo "Mode: $CONTEXT"
+}
+
+# Template profile detection function (Phase 1.5)
+detect_template_profile() {
+    if [ -d "modules" ] || [ -d "stacks" ] || [ -d "ansible" ]; then
+        PROFILE="infrastructure"
+        INFRA_REPO="kodflow/infrastructure-template"
+        INFRA_BASE="https://raw.githubusercontent.com/${INFRA_REPO}/main"
+        INFRA_TREES="https://api.github.com/repos/${INFRA_REPO}/git/trees/main?recursive=1"
+    else
+        PROFILE="devcontainer"
+        INFRA_REPO=""
+    fi
+
+    echo ""
+    echo "═══════════════════════════════════════════════"
+    echo "  Template Profile Detection"
+    echo "═══════════════════════════════════════════════"
+    echo "  Profile  : $PROFILE"
+    echo "  Sources  :"
+    echo "    1. kodflow/devcontainer-template (core)"
+    if [ "$PROFILE" = "infrastructure" ]; then
+        echo "    2. kodflow/infrastructure-template (infra)"
+    fi
+    echo "═══════════════════════════════════════════════"
+}
+
+# Infrastructure file discovery via Git Trees API (Phase 3.0 extension)
+discover_infra_files() {
+    if [ "$PROFILE" != "infrastructure" ]; then
+        return 0
+    fi
+
+    echo ""
+    echo "Discovering infrastructure files..."
+    INFRA_FILES=$(curl -sL "$INFRA_TREES" \
+        | jq -r '.tree[] | select(.type == "blob") | .path' \
+        | grep -E '^(modules|stacks|ansible|packer|ci|tests)/' || true)
+
+    if [ -z "$INFRA_FILES" ]; then
+        echo "  ⚠ No infrastructure files found in template"
+        return 0
+    fi
+
+    local count=$(echo "$INFRA_FILES" | wc -l | tr -d ' ')
+    echo "  Discovered $count infrastructure files"
+}
+
+# Infrastructure sync function (Phase 5.2)
+sync_infrastructure() {
+    if [ "$PROFILE" != "infrastructure" ]; then
+        return 0
+    fi
+
+    if [ -z "$INFRA_FILES" ]; then
+        echo "  ⚠ No infrastructure files to sync"
+        return 0
+    fi
+
+    echo ""
+    echo "═══════════════════════════════════════════════"
+    echo "  Phase 5.2: Infrastructure Sync"
+    echo "═══════════════════════════════════════════════"
+
+    local infra_count=0
+    local infra_skip=0
+
+    while IFS= read -r filepath; do
+        [ -z "$filepath" ] && continue
+
+        # Check against protected paths
+        local is_protected=false
+        case "$filepath" in
+            inventory/*|terragrunt.hcl|.env*|CLAUDE.md|AGENTS.md|README.md|Makefile|docs/*)
+                is_protected=true ;;
+        esac
+
+        if [ "$is_protected" = true ]; then
+            infra_skip=$((infra_skip + 1))
+            continue
+        fi
+
+        # Download and write file
+        if safe_download "$INFRA_BASE/$filepath" "$filepath"; then
+            case "$filepath" in
+                *.sh) chmod +x "$filepath" ;;
+            esac
+            infra_count=$((infra_count + 1))
+        fi
+    done <<< "$INFRA_FILES"
+
+    echo ""
+    echo "  Infrastructure sync: $infra_count files updated, $infra_skip protected"
 }
 
 # Safe download function
@@ -1103,13 +1580,25 @@ validate_hook_scripts() {
 }
 
 echo "═══════════════════════════════════════════════"
-echo "  /update - DevContainer Environment Update"
+echo "  /update - Template Environment Update"
 echo "═══════════════════════════════════════════════"
 echo ""
 
 # Phase 1.0: Environment Detection
 detect_context
+
+# Phase 1.5: Template Profile Detection
+detect_template_profile
+
+# Phase 3.0 (infra extension): Discover infrastructure files
+discover_infra_files
+
 echo ""
+
+# Phase 5.1: DevContainer Sync
+echo "═══════════════════════════════════════════════"
+echo "  Phase 5.1: DevContainer Sync"
+echo "═══════════════════════════════════════════════"
 
 # Hooks
 echo "Updating hooks..."
@@ -1288,6 +1777,9 @@ if [ "$CONTEXT" = "container" ]; then
     safe_download "$BASE/.devcontainer/images/grepai.config.yaml" ".devcontainer/images/grepai.config.yaml"
 fi  # End container-only updates
 
+# Phase 5.2: Infrastructure Sync (if applicable)
+sync_infrastructure
+
 # Phase 6.0: Synchronize user hooks (both container and host)
 echo ""
 echo "Phase 6.0: Synchronizing user hooks..."
@@ -1298,20 +1790,36 @@ echo ""
 echo "Phase 7.0: Validating hook scripts..."
 validate_hook_scripts
 
-# Version
-COMMIT=$(curl -sL "https://api.github.com/repos/kodflow/devcontainer-template/commits/main" | jq -r '.sha[:7]')
+# Version files
+DC_COMMIT=$(curl -sL "https://api.github.com/repos/kodflow/devcontainer-template/commits/main" | jq -r '.sha[:7]')
 DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 if [ "$CONTEXT" = "container" ]; then
-    echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.template-version
+    echo "{\"commit\": \"$DC_COMMIT\", \"updated\": \"$DATE\"}" > .devcontainer/.template-version
 else
-    echo "{\"commit\": \"$COMMIT\", \"updated\": \"$DATE\"}" > "$UPDATE_TARGET/.template-version"
+    echo "{\"commit\": \"$DC_COMMIT\", \"updated\": \"$DATE\"}" > "$UPDATE_TARGET/.template-version"
+fi
+
+# Infrastructure version (only if infrastructure profile)
+if [ "$PROFILE" = "infrastructure" ]; then
+    INFRA_COMMIT=$(curl -sL "https://api.github.com/repos/${INFRA_REPO}/commits/main" | jq -r '.sha[:7]')
+    echo "{\"commit\": \"$INFRA_COMMIT\", \"updated\": \"$DATE\", \"source\": \"${INFRA_REPO}\"}" > .infra-template-version
 fi
 
 echo ""
 echo "═══════════════════════════════════════════════"
-echo "  ✓ Update complete - version: $COMMIT"
-echo "  Context: $CONTEXT"
-echo "  Target: $UPDATE_TARGET"
+echo "  ✓ Update complete"
+echo "═══════════════════════════════════════════════"
+echo "  Profile : $PROFILE"
+echo "  Context : $CONTEXT"
+echo "  Target  : $UPDATE_TARGET"
+echo ""
+echo "  Source 1: kodflow/devcontainer-template"
+echo "  Version : $DC_COMMIT"
+if [ "$PROFILE" = "infrastructure" ]; then
+    echo ""
+    echo "  Source 2: $INFRA_REPO"
+    echo "  Version : $INFRA_COMMIT"
+fi
 echo "═══════════════════════════════════════════════"
 ```
