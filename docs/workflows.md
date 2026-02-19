@@ -1,98 +1,226 @@
+<!-- updated: 2026-02-19T00:00:00Z -->
 # Development Workflows
 
-## Quick Reference
+## Setup — New Product from Template
 
-| Task | Command |
-|------|---------|
-| Initialize project | `/init` |
-| New feature | `/feature <description>` |
-| Bug fix | `/fix <description>` |
-| Code review | `/review` |
-| Plan implementation | `/plan` |
-| Execute plan | `/do` |
-| Commit changes | `/git --commit` |
-| Run tests | `make test` or language-specific |
+```bash
+# 1. Clone le template
+gh repo create mon-produit --template kodflow/infrastructure-template --private
+cd mon-produit
 
-## Project Initialization
+# 2. Ouvrir dans le devcontainer
+code .
 
-```
-/init → detect template → discovery conversation → generate docs → validate environment
-```
+# 3. Remplir l'inventory
+#    inventory/config.hcl        → config Terragrunt
+#    inventory/providers.tfvars  → providers actifs
+#    inventory/stacks.tfvars     → stacks a deployer
+#    inventory/ansible/hosts.yml → machines cibles
+#    inventory/secrets.ref       → references Vault/1Password
 
-Run once after creating a project from this template. Produces vision, architecture, workflows, and agent configuration.
+# 4. Initialiser
+make init
 
-## Feature Development
-
-```
-/feature "add user auth" → plan → implement → /review → PR
+# 5. Planifier et deployer
+make plan
+make apply
 ```
 
-1. Creates `feat/<desc>` branch
-2. Enters planning mode — analyzes codebase, designs approach
-3. Implement changes (agents consult context7 for latest best practices)
-4. `/review` runs 5 executor agents in parallel (correctness, security, design, quality, shell)
-5. PR created via MCP GitHub integration
-
-## Bug Fixes
+## Development Loop
 
 ```
-/fix "login timeout" → plan → implement → /review → PR
+/plan "description"  →  Analyse + plan d'approche
+/do                  →  Execution iterative du plan
+make validate        →  terraform validate + ansible --syntax-check
+make lint            →  tflint + ansible-lint
+make test            →  Terratest + Molecule
+make cost            →  Infracost estimation
+/git --commit        →  Conventional commit + PR
+/review              →  Code review multi-agents
 ```
 
-Same flow as features, uses `fix/` branch prefix and `fix(scope):` commits.
+## Testing Strategy
 
-## Code Review Pipeline
+### Terraform — Terratest (Go)
 
-`/review` triggers 5 parallel analysis passes:
+```
+tests/terratest/
+├── modules/           # Un test par module
+│   ├── compute_test.go
+│   ├── network_test.go
+│   └── vault_test.go
+└── stacks/            # Tests d'integration par stack
+    ├── management_test.go
+    └── compute_test.go
+```
 
-| Executor | Focus |
-|----------|-------|
-| Correctness | Invariants, state machines, off-by-one, concurrency |
-| Security | Taint analysis, OWASP Top 10, secrets, injection |
-| Design | Patterns, SOLID, DDD, antipatterns |
-| Quality | Complexity, code smells, maintainability |
-| Shell | Shell scripts, Dockerfiles, CI/CD safety |
+Chaque test :
+1. `terraform init` + `apply` dans un workspace ephemere
+2. Valide les outputs et l'etat reel
+3. `terraform destroy` en cleanup
 
-## Self-Correction Loop
+### Ansible — Molecule (Python)
 
-When agents detect issues:
-1. Generate code → run linting/tests
-2. If failure → analyze error → fix → retry
-3. Repeat until quality criteria are met
-4. If stuck after 3 attempts → escalate to user
+```
+tests/molecule/
+├── default/           # Scenario par defaut
+│   ├── molecule.yml
+│   ├── converge.yml
+│   └── verify.yml
+└── roles/             # Un scenario par role
+    ├── vault/
+    ├── consul/
+    └── nomad/
+```
+
+Chaque scenario :
+1. Cree un container/VM ephemere
+2. Applique le role
+3. Verifie l'etat avec testinfra
+4. Detruit l'environnement
+
+### Drift Detection
+
+```bash
+make drift
+```
+
+- Compare le state Terraform avec l'etat reel de l'infra
+- Execute via cron (quotidien) ou manuellement
+- Alerte si divergence detectee
+- Genere un rapport diff
+
+### Cost Estimation
+
+```bash
+make cost
+```
+
+- Infracost analyse le plan Terraform
+- Affiche le cout mensuel estime
+- Comparaison avec le cout actuel
+- Integre dans les PR/MR comme commentaire
+
+## Deployment
+
+### Local
+
+```bash
+make plan             # Preview des changements
+make apply            # Deploiement
+make destroy          # Teardown (avec confirmation)
+```
+
+### GitHub Actions
+
+```yaml
+# ci/github/deploy.yml
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:  # terraform validate + lint
+  plan:      # terraform plan + infracost
+  apply:     # terraform apply (main only)
+  test:      # terratest + molecule
+  drift:     # scheduled drift detection
+```
+
+### GitLab CI
+
+```yaml
+# ci/gitlab/.gitlab-ci.yml
+stages:
+  - validate
+  - plan
+  - apply
+  - test
+  - drift
+```
+
+## CI/CD Pipeline Stages
+
+| Stage | Actions | Trigger |
+|-------|---------|---------|
+| **validate** | `terraform validate`, `tflint`, `ansible-lint`, `ansible --syntax-check` | Chaque push |
+| **plan** | `terragrunt plan`, `infracost diff` | Chaque PR/MR |
+| **test** | Terratest, Molecule | Chaque PR/MR |
+| **apply** | `terragrunt apply` | Merge sur main |
+| **drift** | Compare state vs reel | Cron quotidien |
+| **cost** | Infracost report | Chaque PR/MR |
+
+## Template Sync
+
+### Double synchronisation via `/update`
+
+```
+/update
+  ├── Sync devcontainer-template  → .devcontainer/, .claude/
+  └── Sync infrastructure-template → modules/, stacks/, ansible/, packer/, ci/, tests/
+```
+
+### Detection automatique du profil
+
+Le profil est detecte par la presence de repertoires :
+
+| Condition | Profil | Sources |
+|-----------|--------|---------|
+| `modules/` OU `stacks/` OU `ansible/` existe | `infrastructure` | devcontainer-template + infrastructure-template |
+| Sinon | `devcontainer` | devcontainer-template uniquement |
+
+### Commandes disponibles
+
+```bash
+/update                       # Mise a jour complete (auto-detect profil)
+/update --check               # Verifier les mises a jour disponibles
+/update --profile             # Afficher le profil detecte
+/update --component hooks     # Composant specifique (devcontainer)
+/update --component modules   # Composant specifique (infrastructure)
+/update --infra-only          # Sync infrastructure-template uniquement
+/update --devcontainer-only   # Sync devcontainer-template uniquement
+```
+
+### Chemins proteges (jamais ecrases)
+
+| Chemin | Raison |
+|--------|--------|
+| `inventory/` | Configuration produit-specifique |
+| `terragrunt.hcl` | Config racine produit |
+| `.env*` | Secrets et variables d'environnement |
+| `CLAUDE.md` | Documentation projet |
+| `AGENTS.md` | Agents projet |
+| `README.md` | Readme projet |
+| `Makefile` | Build projet |
+| `docs/` | Documentation projet |
+
+### Fichiers de version
+
+- `.devcontainer/.template-version` — version du devcontainer-template
+- `.infra-template-version` — version de l'infrastructure-template (genere automatiquement)
+
+## Secrets Workflow
+
+```
+Bootstrap initial:
+  1Password → Vault unseal keys + root token
+  1Password → Provider credentials (AWS, GCP, etc.)
+
+Runtime:
+  Vault → Dynamic credentials (DB, cloud APIs)
+  Vault → TLS certificates
+  Vault → Encryption (transit)
+  Consul → Service discovery tokens
+
+Fallback:
+  1Password → Si Vault indisponible
+```
 
 ## Branch Conventions
 
-| Type | Branch | Commit |
-|------|--------|--------|
-| Feature | `feat/<desc>` | `feat(scope): message` |
-| Bug fix | `fix/<desc>` | `fix(scope): message` |
-
-## Pre-commit Checks
-
-Auto-detected by language marker:
-
-| Marker | Language | Checks |
-|--------|----------|--------|
-| `go.mod` | Go | golangci-lint, build, test -race |
-| `Cargo.toml` | Rust | clippy, build, test |
-| `package.json` | Node | lint, build, test |
-| `pyproject.toml` | Python | ruff, mypy, pytest |
-
-Priority: Makefile targets → Language-specific commands
-
-## Search Strategy
-
-1. **Semantic search**: `grepai_search` for meaning-based queries
-2. **Call graphs**: `grepai_trace_callers/callees` for impact analysis
-3. **Official docs**: context7 for library documentation
-4. **Fallback**: Grep for exact strings, regex patterns
-
-## Hooks
-
-| Hook | Action |
-|------|--------|
-| `pre-validate.sh` | Protect sensitive files |
-| `post-edit.sh` | Format + lint after edits |
-| `security.sh` | Secret detection |
-| `test.sh` | Run related tests |
+- `feat/<description>` — nouvelle fonctionnalite (module, stack, role)
+- `fix/<description>` — correction de bug
+- Commits conventionnels : `feat:`, `fix:`, `docs:`, `test:`, `ci:`
+- Jamais de commit direct sur `main`
