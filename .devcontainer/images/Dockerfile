@@ -94,23 +94,26 @@ RUN ARCH_AWS=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") &
 # =============================================================================
 # Kubernetes + Binary Tools (kubectl, Helm, Bazelisk, yq) - consolidated
 # =============================================================================
+ARG GITHUB_TOKEN=
 RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     KUBECTL_LATEST=$(curl -fsSL "https://dl.k8s.io/release/stable.txt") && \
     echo "Installing kubectl ${KUBECTL_LATEST}..." && \
     curl -fsSL "https://dl.k8s.io/release/${KUBECTL_LATEST}/bin/linux/${ARCH}/kubectl" -o /usr/local/bin/kubectl && \
     chmod +x /usr/local/bin/kubectl && \
-    HELM_LATEST=$(curl -fsSL "https://api.github.com/repos/helm/helm/releases/latest" | jq -r '.tag_name') && \
+    HELM_LATEST=$(curl -fsSL --retry 5 --retry-delay 5 ${GITHUB_TOKEN:+-H "Authorization: token ${GITHUB_TOKEN}"} "https://api.github.com/repos/helm/helm/releases/latest" | jq -r '.tag_name') && \
     echo "Installing Helm ${HELM_LATEST}..." && \
     curl -fsSL "https://get.helm.sh/helm-${HELM_LATEST}-linux-${ARCH}.tar.gz" | tar xz -C /tmp && \
     mv /tmp/linux-${ARCH}/helm /usr/local/bin/helm && \
     rm -rf /tmp/linux-${ARCH} && \
-    BAZELISK_LATEST=$(curl -fsSL "https://api.github.com/repos/bazelbuild/bazelisk/releases/latest" | jq -r '.tag_name') && \
-    echo "Installing Bazelisk ${BAZELISK_LATEST}..." && \
-    curl -fsSL --retry 5 --retry-delay 5 "https://github.com/bazelbuild/bazelisk/releases/download/${BAZELISK_LATEST}/bazelisk-linux-${ARCH}" -o /usr/local/bin/bazel && \
+    BZ_RELEASE=$(curl -fsSL --retry 5 --retry-delay 5 ${GITHUB_TOKEN:+-H "Authorization: token ${GITHUB_TOKEN}"} "https://api.github.com/repos/bazelbuild/bazelisk/releases/latest") && \
+    echo "Installing Bazelisk $(printf '%s' "$BZ_RELEASE" | jq -r '.tag_name')..." && \
+    BZ_URL=$(printf '%s' "$BZ_RELEASE" | jq -r --arg n "bazelisk-linux-${ARCH}" '.assets[] | select(.name == $n) | .url') && \
+    curl -fsSL --retry 5 --retry-delay 5 -H "Accept: application/octet-stream" ${GITHUB_TOKEN:+-H "Authorization: token ${GITHUB_TOKEN}"} "$BZ_URL" -o /usr/local/bin/bazel && \
     chmod +x /usr/local/bin/bazel && \
-    YQ_LATEST=$(curl -fsSL "https://api.github.com/repos/mikefarah/yq/releases/latest" | jq -r '.tag_name') && \
-    echo "Installing yq ${YQ_LATEST}..." && \
-    curl -fsSL --retry 5 --retry-delay 5 "https://github.com/mikefarah/yq/releases/download/${YQ_LATEST}/yq_linux_${ARCH}" -o /usr/bin/yq && \
+    YQ_RELEASE=$(curl -fsSL --retry 5 --retry-delay 5 ${GITHUB_TOKEN:+-H "Authorization: token ${GITHUB_TOKEN}"} "https://api.github.com/repos/mikefarah/yq/releases/latest") && \
+    echo "Installing yq $(printf '%s' "$YQ_RELEASE" | jq -r '.tag_name')..." && \
+    YQ_URL=$(printf '%s' "$YQ_RELEASE" | jq -r --arg n "yq_linux_${ARCH}" '.assets[] | select(.name == $n) | .url') && \
+    curl -fsSL --retry 5 --retry-delay 5 -H "Accept: application/octet-stream" ${GITHUB_TOKEN:+-H "Authorization: token ${GITHUB_TOKEN}"} "$YQ_URL" -o /usr/bin/yq && \
     chmod +x /usr/bin/yq
 
 # =============================================================================
@@ -212,7 +215,6 @@ USER vscode
 # =============================================================================
 # User Tools (status-line, xdg-open)
 # =============================================================================
-ARG GITHUB_TOKEN=
 RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     mkdir -p ~/.local/bin && \
     SL_RELEASE=$(curl -fsSL --retry 5 --retry-delay 5 ${GITHUB_TOKEN:+-H "Authorization: token ${GITHUB_TOKEN}"} "https://api.github.com/repos/kodflow/status-line/releases/latest") && \
