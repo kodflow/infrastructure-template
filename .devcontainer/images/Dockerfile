@@ -212,10 +212,11 @@ USER vscode
 # =============================================================================
 # User Tools (status-line, xdg-open)
 # =============================================================================
+ARG GITHUB_TOKEN=
 RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     mkdir -p ~/.local/bin && \
-    SL_TAG=$(curl -fsSLI --retry 3 --retry-delay 2 -o /dev/null -w '%{url_effective}' https://github.com/kodflow/status-line/releases/latest) && \
-    SL_TAG=${SL_TAG##*/} && \
+    SL_TAG=$(curl -fsSL --retry 3 --retry-delay 2 ${GITHUB_TOKEN:+-H "Authorization: token ${GITHUB_TOKEN}"} "https://api.github.com/repos/kodflow/status-line/releases/latest" | jq -r '.tag_name') && \
+    [ -n "$SL_TAG" ] && [ "$SL_TAG" != "null" ] && \
     echo "Installing status-line (${SL_TAG})..." && \
     curl -fsSL --retry 3 --retry-delay 2 "https://github.com/kodflow/status-line/releases/download/${SL_TAG}/status-line-linux-${ARCH}" \
       -o ~/.local/bin/status-line && \
