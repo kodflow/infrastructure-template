@@ -214,23 +214,20 @@ RUN chmod -R 755 /etc/claude-defaults/ /home/vscode/.claude/scripts/ /etc/devcon
 USER vscode
 
 # =============================================================================
-# User Tools (status-line, ktn-linter, xdg-open) - consolidated
+# User Tools (status-line, xdg-open)
 # =============================================================================
-ARG STATUS_LINE_VERSION=v0.6.2
-ARG STATUS_LINE_SHA256_AMD64=6ba6b53162444fbc87f40e76b236e459ac6f88b99d2bdc183379a693592240a3
-ARG STATUS_LINE_SHA256_ARM64=8bfd15968a836276a075fd6dd5b86f075ff3a7eb11dec8e3c5733bcef83ece74
 RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     mkdir -p ~/.local/bin && \
-    curl -fsSL "https://github.com/kodflow/status-line/releases/download/${STATUS_LINE_VERSION}/status-line-linux-${ARCH}" \
+    SL_TAG=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/kodflow/status-line/releases/latest) && \
+    SL_TAG=${SL_TAG##*/} && \
+    echo "Installing status-line (${SL_TAG})..." && \
+    curl -fsSL "https://github.com/kodflow/status-line/releases/download/${SL_TAG}/status-line-linux-${ARCH}" \
       -o ~/.local/bin/status-line && \
-    EXPECTED_SL_SHA=$([ "$ARCH" = "arm64" ] && echo "$STATUS_LINE_SHA256_ARM64" || echo "$STATUS_LINE_SHA256_AMD64") && \
-    echo "$EXPECTED_SL_SHA  $HOME/.local/bin/status-line" | sha256sum -c - && \
+    curl -fsSL "https://github.com/kodflow/status-line/releases/download/${SL_TAG}/status-line-linux-${ARCH}.sha256" \
+      -o /tmp/status-line.sha256 && \
+    sed -i "s|status-line-linux-${ARCH}|$HOME/.local/bin/status-line|" /tmp/status-line.sha256 && \
+    sha256sum -c /tmp/status-line.sha256 && rm -f /tmp/status-line.sha256 && \
     chmod +x ~/.local/bin/status-line && \
-    KTN_LATEST=$(curl -fsSL "https://api.github.com/repos/kodflow/ktn-linter/releases/latest" | jq -r '.tag_name') && \
-    echo "Installing ktn-linter ${KTN_LATEST}..." && \
-    curl -fsSL "https://github.com/kodflow/ktn-linter/releases/download/${KTN_LATEST}/ktn-linter-linux-${ARCH}" \
-      -o ~/.local/bin/ktn-linter && \
-    chmod +x ~/.local/bin/ktn-linter && \
     printf '%s\n' '#!/bin/sh' \
     '[ $# -eq 0 ] && { echo "Usage: xdg-open <url> [url...]" >&2; exit 2; }' \
     'for url in "$@"; do printf "\n  Open in browser: %s\n" "$url"; done' \
