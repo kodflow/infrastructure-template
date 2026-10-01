@@ -5,13 +5,6 @@
       "args": ["-y", "@upstash/context7-mcp@latest"],
       "env": {}
     },
-    "codacy": {
-      "command": "npx",
-      "args": ["-y", "@codacy/codacy-mcp@latest"],
-      "env": {
-        "CODACY_ACCOUNT_TOKEN": "{{CODACY_TOKEN}}"
-      }
-    },
     "github": {
       "command": "docker",
       "args": [

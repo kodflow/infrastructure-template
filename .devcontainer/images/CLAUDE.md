@@ -89,7 +89,6 @@ Configured in `mcp.json.tpl`:
 | **context7** | `@upstash/context7-mcp` | Up-to-date documentation for prompts | None (rate-limited) |
 | **GitHub** | `ghcr.io/github/github-mcp-server` (Docker) | PR, Issues, Repos | `GITHUB_TOKEN` |
 | **GitLab** | `@zereight/mcp-gitlab` | MR, Issues, Pipelines, Wiki | `GITLAB_TOKEN` |
-| **Codacy** | `@codacy/codacy-mcp` | Code quality, Security | `CODACY_TOKEN` |
 | **Playwright** | `@playwright/mcp` | Browser automation, E2E tests | None |
 
 **grepai tools (MANDATORY - use instead of Grep):**

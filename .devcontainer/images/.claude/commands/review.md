@@ -15,7 +15,6 @@ allowed-tools:
   - "Grep(**/*)"
   - "mcp__github__*"
   - "mcp__gitlab__*"
-  - "mcp__codacy__*"
   - "mcp__grepai__*"
   - "Task(*)"
   - "TaskCreate(*)"
@@ -524,8 +523,6 @@ feedback_collection:
       gitlab:
         - "mcp__gitlab__list_merge_request_notes"
         - "mcp__gitlab__list_merge_request_discussions"
-      common:
-        - "mcp__codacy__codacy_list_pull_request_issues"
 
   2_budget_filter:
     rule: |
@@ -690,7 +687,7 @@ peek_decompose:
   1_diff_snapshot:
     tool: |
       IF diff_source == "pr" (GitHub):
-        mcp__codacy__codacy_get_pull_request_git_diff
+        mcp__github__pull_request_read (method: get_diff)
       ELSE IF diff_source == "mr" (GitLab):
         mcp__gitlab__get_merge_request_changes
       ELSE:
