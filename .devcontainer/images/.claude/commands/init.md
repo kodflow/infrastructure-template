@@ -31,7 +31,6 @@ allowed-tools:
   - "TaskList(*)"
   - "TaskGet(*)"
   - "mcp__github__*"
-  - "mcp__codacy__*"
 ---
 
 # /init - Conversational Project Discovery
