@@ -51,8 +51,8 @@ Template de base pour toute infrastructure. Replique sur 1000+ produits, seul l'
 ## How to Work
 
 1. **New product**: clone template, fill `inventory/`, run `make plan`
-2. **New feature**: `/plan "description"` → `/do` → `/git --commit`
-3. **Bug fix**: `/plan "description"` → `/do` → `/git --commit`
+2. **New feature**: `/plan "description"` → `/do`
+3. **Bug fix**: `/plan "description"` → `/do`
 4. **Code review**: `/review` → specialist agents
 5. **Sync template**: `/update` (devcontainer + infra-template)
 

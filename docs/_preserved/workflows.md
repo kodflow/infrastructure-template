@@ -35,7 +35,6 @@ make validate        →  terraform validate + ansible --syntax-check
 make lint            →  tflint + ansible-lint
 make test            →  Terratest + Molecule
 make cost            →  Infracost estimation
-/git --commit        →  Conventional commit + PR
 /review              →  Code review multi-agents
 ```
 

@@ -44,7 +44,7 @@ or `ansible/` directories. Infrastructure projects sync from both sources.
 **DevContainer components** (from `devcontainer-template`):
 
 - **Hooks** - Claude scripts (format, lint, security, etc.)
-- **Commands** - Slash commands (/git, /search, etc.)
+- **Commands** - Slash commands (/search, etc.)
 - **Agents** - Agent definitions (specialists, executors)
 - **Lifecycle** - Lifecycle hooks (delegation stubs)
 - **Image-hooks** - Hooks embedded in the Docker image (real logic)
@@ -130,7 +130,7 @@ Options:
 
 DevContainer components:
   hooks        Claude scripts (format, lint...)
-  commands     Slash commands (/git, /search)
+  commands     Slash commands (/search)
   agents       Agent definitions (specialists)
   lifecycle    Lifecycle hooks (delegation stubs)
   image-hooks  Image-embedded lifecycle hooks
