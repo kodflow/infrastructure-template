@@ -499,7 +499,6 @@ environments:
 |-------|-------------|
 | `/plan` | Use before `/infra --plan` for complex changes |
 | `/review` | Review infrastructure code changes |
-| `/git` | Commit infrastructure changes |
 | `/search` | Research Terraform patterns |
 
 ---

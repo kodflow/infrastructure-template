@@ -48,7 +48,6 @@ Enforced by `commit-validate.sh` hook.
 | `/plan` | Planning mode |
 | `/do` | Iterative task execution |
 | `/review` | Code review (5 agents) |
-| `/git` | Branch + commit + PR |
 | `/search` | Documentation research |
 | `/docs` | Deep project docs generation |
 | `/test` | E2E testing (Playwright) |
@@ -74,10 +73,7 @@ Each file < 100 lines. Read at session start.
 
 ## 7.0 GIT WORKFLOW
 
-Never commit to main directly. Use `/git --commit` which:
-1. Creates branch
-2. Commits with conventional format
-3. Opens PR
+Never commit to main directly: commit on a branch with a conventional message, then open a PR.
 
 ## 8.0 SAFEGUARDS
 

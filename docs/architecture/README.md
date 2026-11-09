@@ -42,7 +42,7 @@ C4Context
 
 | De | Vers | Protocole | Objectif |
 |----|------|-----------|----------|
-| Maintainer | Template | CLI local | `make plan`, `make apply`, `/git` |
+| Maintainer | Template | CLI local | `make plan`, `make apply` |
 | Template | Cloud Providers | HTTPS (Terraform) | Provisioning infrastructure |
 | Template | mgmt.example.com | S3/HTTP | State TF, secrets Vault, discovery Consul |
 | Template | GitHub/GitLab | Git/HTTPS | CI/CD pipelines, code review |

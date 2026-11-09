@@ -185,7 +185,6 @@ echo "════════════════════════�
 echo "  ✓ Installation complete!"
 echo ""
 echo "  Available commands:"
-echo "    /git     - Git workflow (commit, branch, PR)"
 echo "    /search  - Documentation search"
 echo "    /prompt  - Write better /plan descriptions"
 echo ""
